@@ -17,7 +17,7 @@ function App() {
   const [redirectChain, setRedirectChain] = useState<RedirectChainItem[]>([]);
   const [analysisResult, setAnalysisResult] = useState<UrlAnalysisResult | null>(null);
   
-  const { loading: analyzing, error: analysisError, analyzeUrl } = useUrlAnalysis();
+  const { analyzeUrl } = useUrlAnalysis();
 
   // Handle launch screen completion
   const handleLaunchComplete = () => {
