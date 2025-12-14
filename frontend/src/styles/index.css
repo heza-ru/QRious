@@ -54,7 +54,10 @@
 
   /* Text utilities */
   .text-display {
-    @apply text-display font-bold tracking-tight;
+    font-size: 4rem;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    @apply font-bold tracking-tight;
   }
 
   .text-label {
