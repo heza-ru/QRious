@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { PreloaderScreen } from './components/screens/PreloaderScreen';
 import { LaunchScreen } from './components/screens/LaunchScreen';
@@ -82,6 +82,7 @@ function App() {
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [redirectChain, setRedirectChain] = useState<RedirectChainItem[]>([]);
   const [analysisResult, setAnalysisResult] = useState<UrlAnalysisResult | null>(null);
+  const isProcessingScanRef = useRef(false);
   
   const { analyzeUrl } = useUrlAnalysis();
 
@@ -99,30 +100,45 @@ function App() {
 
   // Handle QR scan - wrapped in useCallback to prevent unnecessary re-renders
   const handleScan = useCallback(async (url: string) => {
+    // Prevent multiple simultaneous scans
+    if (isProcessingScanRef.current) {
+      console.warn('Scan already in progress, ignoring duplicate scan');
+      return;
+    }
+    
+    isProcessingScanRef.current = true;
     console.log('handleScan called with URL:', url);
     console.log('Current screen before scan:', currentScreen);
     
-    setScannedUrl(url);
-    console.log('Setting screen to ANALYSIS');
-    setCurrentScreen(SCREENS.ANALYSIS); // Show loading while expanding
-
     try {
-      console.log('Expanding URL:', url);
-      // Expand URL to get redirect chain
-      const expansion = await expandUrl(url);
-      console.log('URL expanded. Final URL:', expansion.finalUrl);
-      setExpandedUrl(expansion.finalUrl);
-      setRedirectChain(expansion.redirectChain);
-      // Move to URL reveal screen after expansion
-      console.log('Setting screen to URL_REVEAL');
-      setCurrentScreen(SCREENS.URL_REVEAL);
-    } catch (error) {
-      console.error('Failed to expand URL:', error);
-      // Continue with original URL if expansion fails
-      setExpandedUrl(url);
-      setRedirectChain([]);
-      console.log('Setting screen to URL_REVEAL (fallback)');
-      setCurrentScreen(SCREENS.URL_REVEAL);
+      // Immediately set the scanned URL and change screen to prevent going back to scanner
+      setScannedUrl(url);
+      console.log('Setting screen to ANALYSIS immediately');
+      setCurrentScreen(SCREENS.ANALYSIS); // Show loading while expanding
+
+      try {
+        console.log('Expanding URL:', url);
+        // Expand URL to get redirect chain
+        const expansion = await expandUrl(url);
+        console.log('URL expanded. Final URL:', expansion.finalUrl);
+        setExpandedUrl(expansion.finalUrl);
+        setRedirectChain(expansion.redirectChain);
+        // Move to URL reveal screen after expansion
+        console.log('Setting screen to URL_REVEAL');
+        setCurrentScreen(SCREENS.URL_REVEAL);
+      } catch (error) {
+        console.error('Failed to expand URL:', error);
+        // Continue with original URL if expansion fails
+        setExpandedUrl(url);
+        setRedirectChain([]);
+        console.log('Setting screen to URL_REVEAL (fallback)');
+        setCurrentScreen(SCREENS.URL_REVEAL);
+      }
+    } finally {
+      // Reset the flag after a delay to allow navigation to complete
+      setTimeout(() => {
+        isProcessingScanRef.current = false;
+      }, 2000);
     }
   }, []);
 

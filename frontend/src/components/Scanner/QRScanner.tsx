@@ -105,11 +105,20 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
           const textToScan = scanCallbackRef.current;
           console.log('Calling onScan with:', textToScan);
           scanCallbackRef.current = null; // Clear to prevent duplicate calls
+          
+          // Ensure scanner is stopped before calling onScan
+          stopScanning();
+          
           try {
+            // Call onScan - this should trigger navigation away from scanner screen
             currentOnScan(textToScan);
-            console.log('onScan called successfully');
+            console.log('onScan called successfully - navigation should happen now');
           } catch (error) {
             console.error('Error calling onScan:', error);
+            // Reset state on error so user can try again
+            setHasProcessedScan(false);
+            setShowParticles(false);
+            setShowSuccess(false);
           }
         } else {
           console.error('onScan callback not available or scanCallbackRef is null', {
@@ -129,13 +138,18 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
 
   useEffect(() => {
     // Only start scanning if we haven't processed a scan yet
-    if (!hasProcessedScan) {
+    // This prevents the scanner from restarting after a successful scan
+    if (!hasProcessedScan && !showParticles) {
+      console.log('Starting scanner (hasProcessedScan:', hasProcessedScan, ', showParticles:', showParticles, ')');
       startScanning();
+    } else {
+      console.log('Skipping scanner start - scan already processed or particles showing');
     }
     return () => {
+      console.log('Cleaning up scanner');
       stopScanning();
     };
-  }, [startScanning, stopScanning, hasProcessedScan]);
+  }, [startScanning, stopScanning, hasProcessedScan, showParticles]);
 
   useEffect(() => {
     if (isScanning) {
