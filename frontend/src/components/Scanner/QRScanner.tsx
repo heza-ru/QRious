@@ -590,11 +590,9 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
         />
         <motion.div
           animate={{
-            rotate: isUploading ? 360 : 0,
-            scale: isUploading ? [1, 1.2, 1] : 1,
+            scale: isUploading ? [1, 1.1, 1] : 1,
           }}
           transition={{
-            rotate: { duration: 1, repeat: Infinity, ease: 'linear' },
             scale: { duration: 1.5, repeat: Infinity, ease: 'easeInOut' },
           }}
           className="relative z-10"

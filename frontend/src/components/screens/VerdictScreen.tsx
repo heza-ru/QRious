@@ -188,7 +188,6 @@ export function VerdictScreen({ result, onViewDetails, onScanAgain }: VerdictScr
                   }}
                   whileHover={{
                     scale: 1.2,
-                    rotate: 360,
                     transition: { duration: 0.5 },
                   }}
                   className="flex-shrink-0 relative"

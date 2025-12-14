@@ -286,7 +286,6 @@ export function UrlRevealScreen({ url, originalUrl, redirectChain, onContinue }:
                 }}
                 whileHover={{
                   scale: 1.2,
-                  rotate: 360,
                   transition: { duration: 0.5 },
                 }}
                 className="flex-shrink-0 mt-1 relative"
@@ -466,18 +465,7 @@ export function UrlRevealScreen({ url, originalUrl, redirectChain, onContinue }:
                 }}
               />
               <span className="relative z-10 flex items-center justify-center gap-2">
-                <motion.span
-                  animate={{
-                    rotate: [0, 360],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: 'linear',
-                  }}
-                >
-                  <ShieldCheck size={20} weight="bold" />
-                </motion.span>
+                <ShieldCheck size={20} weight="bold" />
                 Continue to Analysis
               </span>
             </motion.button>
