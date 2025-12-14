@@ -117,7 +117,7 @@ export class UrlAnalysisService {
       checks.push({
         name: 'Domain Reputation',
         weight: 10,
-        passed: isKnownGood || true, // Default to passing if not known good
+        passed: isKnownGood, // Only pass if domain is in known good list
         reason: undefined,
       });
     } catch (error) {

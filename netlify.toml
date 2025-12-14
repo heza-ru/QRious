@@ -1,9 +1,10 @@
 [build]
-  command = "cd frontend && npm run build"
+  command = "cd frontend && npm install --include=dev && npm run build"
   publish = "frontend/dist"
 
 [build.environment]
   NODE_VERSION = "20"
+  NPM_CONFIG_PRODUCTION = "false"
 
 # Redirect rules for SPA
 [[redirects]]
@@ -19,7 +20,7 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=()"
 
 [[headers]]
   for = "/assets/*"

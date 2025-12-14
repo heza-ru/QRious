@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { LaunchScreen } from './components/screens/LaunchScreen';
 import { ScannerScreen } from './components/screens/ScannerScreen';
@@ -26,8 +26,8 @@ function App() {
     }, 1500);
   };
 
-  // Handle QR scan
-  const handleScan = async (url: string) => {
+  // Handle QR scan - wrapped in useCallback to prevent unnecessary re-renders
+  const handleScan = useCallback(async (url: string) => {
     setScannedUrl(url);
     setCurrentScreen(SCREENS.ANALYSIS); // Show loading while expanding
 
@@ -45,7 +45,7 @@ function App() {
       setRedirectChain([]);
       setCurrentScreen(SCREENS.URL_REVEAL);
     }
-  };
+  }, []);
 
   // Handle URL reveal continue
   const handleUrlRevealContinue = async () => {
