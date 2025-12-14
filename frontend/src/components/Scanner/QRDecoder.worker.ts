@@ -1,18 +1,9 @@
-import { BrowserQRCodeReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
-
-let codeReader: BrowserQRCodeReader | null = null;
+import QrScanner from 'qr-scanner';
 
 self.onmessage = async (event: MessageEvent) => {
   const { imageData, width, height } = event.data;
 
   try {
-    if (!codeReader) {
-      const hints = new Map<DecodeHintType, any>();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-      codeReader = new BrowserQRCodeReader(hints as any);
-    }
-
     // Create ImageData from the received data
     const imgData = new ImageData(
       new Uint8ClampedArray(imageData),
@@ -20,7 +11,7 @@ self.onmessage = async (event: MessageEvent) => {
       height
     );
 
-    // Create a canvas to render the image
+    // Convert ImageData to OffscreenCanvas for qr-scanner
     const canvas = new OffscreenCanvas(width, height);
     const ctx = canvas.getContext('2d');
     
@@ -30,17 +21,13 @@ self.onmessage = async (event: MessageEvent) => {
 
     ctx.putImageData(imgData, 0, 0);
 
-    // Convert canvas to ImageBitmap for decoding
-    const imageBitmap = await createImageBitmap(canvas);
-    
-    // Use decodeFromImageElement - it accepts ImageBitmap in newer versions
-    // Cast to any to work around TypeScript type issues with ImageBitmap
-    const result = await (codeReader as any).decodeFromImageElement(imageBitmap as any);
+    // qr-scanner's scanImage accepts OffscreenCanvas
+    const result = await QrScanner.scanImage(canvas);
     
     if (result) {
       self.postMessage({
         success: true,
-        text: result.getText(),
+        text: result,
       });
     } else {
       self.postMessage({
@@ -51,14 +38,18 @@ self.onmessage = async (event: MessageEvent) => {
   } catch (error) {
     // Silently fail - QR code not found is expected
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    if (errorMessage.includes('No QR code') || errorMessage.includes('NotFoundException')) {
+    
+    // qr-scanner throws 'No QR code found' error when no code is detected
+    if (errorMessage.includes('No QR code') || 
+        errorMessage.includes('not found') ||
+        errorMessage === 'No QR code found') {
       // Expected - no QR code in frame
       self.postMessage({
         success: false,
         error: 'No QR code found',
       });
     } else {
-      // Unexpected error
+      // Unexpected error - log it for debugging
       console.error('QR decoder error:', errorMessage);
       self.postMessage({
         success: false,
