@@ -23,6 +23,17 @@ export function useQRScanner(options: UseQRScannerOptions = {}) {
         return;
       }
 
+      // Clean up any existing scanner instance before creating a new one
+      if (qrScannerRef.current) {
+        try {
+          qrScannerRef.current.stop();
+          qrScannerRef.current.destroy();
+        } catch (cleanupError) {
+          console.error('Error cleaning up existing scanner:', cleanupError);
+        }
+        qrScannerRef.current = null;
+      }
+
       // Check if camera is available
       const hasCamera = await QrScanner.hasCamera();
       if (!hasCamera) {
@@ -51,13 +62,28 @@ export function useQRScanner(options: UseQRScannerOptions = {}) {
         'environment' // preferredCamera - Use back camera on mobile
       );
 
+      // Start scanning BEFORE assigning to ref
+      // If start() fails, we need to explicitly destroy the instance
+      try {
+        await qrScanner.start();
+      } catch (startError) {
+        // Explicitly destroy the instance if start() fails
+        try {
+          qrScanner.destroy();
+        } catch (destroyError) {
+          console.error('Error destroying scanner after failed start:', destroyError);
+        }
+        throw startError; // Re-throw to be handled by outer catch
+      }
+      
+      // Only assign to ref after successful start
       qrScannerRef.current = qrScanner;
-
-      // Start scanning
-      await qrScanner.start();
       setHasPermission(true);
       setIsScanning(true);
     } catch (err) {
+      // Error handling - the qrScanner instance has already been destroyed if start() failed
+      // The ref cleanup at the start of this function handles any previous instances.
+      
       const errorMessage = err instanceof Error ? err.message : 'Failed to access camera';
       setError(errorMessage);
       setHasPermission(false);

@@ -102,6 +102,7 @@ function App() {
           <UrlRevealScreen
             key="url-reveal"
             url={expandedUrl}
+            originalUrl={scannedUrl || undefined}
             redirectChain={redirectChain}
             onContinue={handleUrlRevealContinue}
           />
