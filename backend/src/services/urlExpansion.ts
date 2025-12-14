@@ -130,7 +130,9 @@ export class UrlExpansionService {
   private isShortenedUrlService(url: string): boolean {
     const shortenedDomains = [
       'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly',
-      'short.link', 'cutt.ly', 'rebrand.ly', 'shorturl.at', 'tiny.cc'
+      'short.link', 'cutt.ly', 'rebrand.ly', 'shorturl.at', 'tiny.cc',
+      'me-qr.com', 'meqr.com', // ME-QR service
+      'qr-code-generator.com', 'qrcode-monkey.com', 'qrcode.tec-it.com'
     ];
     try {
       const hostname = new URL(url).hostname.toLowerCase();
@@ -141,10 +143,12 @@ export class UrlExpansionService {
   }
 
   private extractRedirectFromHtml(html: string, baseUrl: string): string | null {
-    // Check for meta refresh redirect (more flexible pattern)
+    // Check for meta refresh redirect (more flexible patterns)
     const metaRefreshPatterns = [
       /<meta[^>]*http-equiv=["']refresh["'][^>]*content=["'][^"']*url=([^"'>\s;]+)/i,
       /<meta[^>]*content=["'][^"']*url=([^"'>\s;]+)[^"']*["'][^>]*http-equiv=["']refresh["']/i,
+      /<meta[^>]*http-equiv=["']refresh["'][^>]*content=["']\d+;\s*url=([^"'>\s;]+)/i,
+      /<meta[^>]*content=["']\d+;\s*url=([^"'>\s;]+)[^"']*["'][^>]*http-equiv=["']refresh["']/i,
     ];
     
     for (const pattern of metaRefreshPatterns) {
@@ -152,8 +156,10 @@ export class UrlExpansionService {
       if (match && match[1]) {
         try {
           let url = match[1].trim();
-          // Remove any trailing semicolons or quotes
-          url = url.replace(/[;"']+$/, '');
+          // Remove any trailing semicolons, quotes, or whitespace
+          url = url.replace(/[;"'\s]+$/, '');
+          // Decode HTML entities
+          url = url.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
           return new URL(url, baseUrl).href;
         } catch {
           continue;
@@ -168,13 +174,21 @@ export class UrlExpansionService {
       /window\.location\.replace\s*\(\s*["']([^"']+)["']/i,
       /location\.href\s*=\s*["']([^"']+)["']/i,
       /location\.replace\s*\(\s*["']([^"']+)["']/i,
+      /window\.location\s*=\s*([^;'"]+);/i, // Without quotes
+      /window\.location\.href\s*=\s*([^;'"]+);/i,
+      // For ME-QR and similar services that might use data attributes
+      /data-url=["']([^"']+)["']/i,
+      /data-redirect=["']([^"']+)["']/i,
     ];
 
     for (const pattern of jsPatterns) {
       const match = html.match(pattern);
       if (match && match[1]) {
         try {
-          return new URL(match[1], baseUrl).href;
+          let url = match[1].trim();
+          // Clean up the URL
+          url = url.replace(/[;"'\s]+$/, '');
+          return new URL(url, baseUrl).href;
         } catch {
           continue;
         }
@@ -182,17 +196,38 @@ export class UrlExpansionService {
     }
 
     // Check for <a> tags with redirect-like behavior (for some services)
-    // This is less reliable but can catch some edge cases
-    const linkMatch = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*redirect/i);
-    if (linkMatch && linkMatch[1]) {
+    const linkPatterns = [
+      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*redirect/i,
+      /<a[^>]*class=["'][^"']*redirect[^"']*["'][^>]*href=["']([^"']+)["']/i,
+      // For ME-QR - check for links that might be the actual destination
+      /<a[^>]*href=["']([^"']+)["'][^>]*target=["']_blank["']/i,
+    ];
+
+    for (const pattern of linkPatterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        try {
+          const url = new URL(match[1], baseUrl).href;
+          // Only use if it's different from base and looks like a real URL
+          if (url !== baseUrl && (url.startsWith('http://') || url.startsWith('https://'))) {
+            return url;
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    // Check for JSON-LD or script tags with redirect URLs (some services use this)
+    const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([^<]+)<\/script>/i);
+    if (jsonLdMatch) {
       try {
-        const url = new URL(linkMatch[1], baseUrl).href;
-        // Only use if it's different from base
-        if (url !== baseUrl) {
-          return url;
+        const json = JSON.parse(jsonLdMatch[1]);
+        if (json.url && typeof json.url === 'string') {
+          return new URL(json.url, baseUrl).href;
         }
       } catch {
-        // Ignore
+        // Ignore JSON parse errors
       }
     }
 

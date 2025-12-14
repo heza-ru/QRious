@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useQRScanner } from '../../hooks/useQRScanner';
 import { Upload, CheckCircle, Sparkle, Scan } from 'phosphor-react';
 import QrScanner from 'qr-scanner';
@@ -35,16 +35,8 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
     onScanRef.current = onScan;
   }, [onScan]);
 
-  // Handle scanned text from camera
-  useEffect(() => {
-    if (scannedText && !hasProcessedScan) {
-      console.log('QR Code detected from camera:', scannedText);
-      handleScanResult(scannedText);
-    }
-  }, [scannedText, hasProcessedScan]);
-
   // Unified function to handle scan results (from camera or file)
-  const handleScanResult = (url: string) => {
+  const handleScanResult = useCallback((url: string) => {
     if (hasProcessedScan) {
       console.log('Scan already processed, ignoring');
       return;
@@ -128,7 +120,15 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
     }, 1500);
 
     return () => clearTimeout(timer);
-  };
+  }, [hasProcessedScan, stopScanning, videoRef]);
+
+  // Handle scanned text from camera
+  useEffect(() => {
+    if (scannedText && !hasProcessedScan) {
+      console.log('QR Code detected from camera:', scannedText);
+      handleScanResult(scannedText);
+    }
+  }, [scannedText, hasProcessedScan, handleScanResult]);
 
   // Start scanning on mount (only if not processed)
   useEffect(() => {
@@ -162,9 +162,15 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
   // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    console.log('File selected:', file.name, file.type, file.size);
 
     if (!file.type.startsWith('image/')) {
+      console.error('Invalid file type:', file.type);
       if (onError) {
         onError('Please select an image file');
       }
@@ -177,27 +183,43 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
     }
 
     setIsUploading(true);
+    console.log('Starting file scan...');
+    
     try {
       stopScanning();
       console.log('Scanning file:', file.name);
+      
+      // Use QrScanner to scan the image
       const result = await QrScanner.scanImage(file);
       
-      if (result) {
+      console.log('QrScanner.scanImage result:', result);
+      
+      if (result && typeof result === 'string' && result.trim().length > 0) {
         console.log('QR Code found in file:', result);
         handleScanResult(result);
       } else {
+        console.warn('No QR code found or empty result');
         if (onError) {
           onError('No QR code found in image');
         }
+        setIsUploading(false);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to scan image';
       console.error('File scan error:', err);
+      console.error('Error details:', {
+        message: errorMessage,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size
+      });
+      
       if (onError) {
         onError(errorMessage);
       }
-    } finally {
       setIsUploading(false);
+    } finally {
+      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
