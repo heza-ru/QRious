@@ -1,0 +1,18 @@
+/* Custom animation utilities for Framer Motion integration */
+
+.glide-transition {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 400ms;
+}
+
+.no-bounce {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth color transitions */
+.color-transition {
+  transition: color 600ms cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 600ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
