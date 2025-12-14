@@ -1,6 +1,7 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
 export const SCREENS = {
+  PRELOADER: 'preloader',
   LAUNCH: 'launch',
   SCANNER: 'scanner',
   URL_REVEAL: 'url_reveal',

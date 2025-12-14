@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import { PreloaderScreen } from './components/screens/PreloaderScreen';
 import { LaunchScreen } from './components/screens/LaunchScreen';
 import { ScannerScreen } from './components/screens/ScannerScreen';
 import { UrlRevealScreen } from './components/screens/UrlRevealScreen';
@@ -11,13 +12,18 @@ import { expandUrl } from './services/api';
 import type { UrlAnalysisResult, RedirectChainItem } from './services/api';
 
 function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>(SCREENS.LAUNCH);
+  const [currentScreen, setCurrentScreen] = useState<Screen>(SCREENS.PRELOADER);
   const [scannedUrl, setScannedUrl] = useState<string | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [redirectChain, setRedirectChain] = useState<RedirectChainItem[]>([]);
   const [analysisResult, setAnalysisResult] = useState<UrlAnalysisResult | null>(null);
   
   const { analyzeUrl } = useUrlAnalysis();
+
+  // Handle preloader completion
+  const handlePreloaderComplete = () => {
+    setCurrentScreen(SCREENS.LAUNCH);
+  };
 
   // Handle launch screen completion
   const handleLaunchComplete = () => {
@@ -47,10 +53,23 @@ function App() {
     }
   }, []);
 
-  // Handle URL reveal continue
-  const handleUrlRevealContinue = async () => {
-    if (!expandedUrl) return;
+  // Handle scan again
+  const handleScanAgain = useCallback(() => {
+    setScannedUrl(null);
+    setExpandedUrl(null);
+    setRedirectChain([]);
+    setAnalysisResult(null);
+    setCurrentScreen(SCREENS.SCANNER);
+  }, []);
 
+  // Handle URL reveal continue
+  const handleUrlRevealContinue = useCallback(async () => {
+    if (!expandedUrl) {
+      console.error('No expanded URL available');
+      return;
+    }
+
+    // Set analysis screen first
     setCurrentScreen(SCREENS.ANALYSIS);
 
     try {
@@ -66,16 +85,7 @@ function App() {
       // For now, go back to scanner
       handleScanAgain();
     }
-  };
-
-  // Handle scan again
-  const handleScanAgain = () => {
-    setScannedUrl(null);
-    setExpandedUrl(null);
-    setRedirectChain([]);
-    setAnalysisResult(null);
-    setCurrentScreen(SCREENS.SCANNER);
-  };
+  }, [expandedUrl, analyzeUrl, handleScanAgain]);
 
   // Handle scanner error
   const handleScannerError = (error: string) => {
@@ -86,6 +96,10 @@ function App() {
   return (
     <div className="min-h-screen w-full bg-background-primary">
       <AnimatePresence mode="wait">
+        {currentScreen === SCREENS.PRELOADER && (
+          <PreloaderScreen key="preloader" onComplete={handlePreloaderComplete} />
+        )}
+
         {currentScreen === SCREENS.LAUNCH && (
           <LaunchScreen key="launch" onComplete={handleLaunchComplete} />
         )}
