@@ -11,6 +11,71 @@ import { useUrlAnalysis } from './hooks/useUrlAnalysis';
 import { expandUrl } from './services/api';
 import type { UrlAnalysisResult, RedirectChainItem } from './services/api';
 
+// Client-side fallback analysis function
+function createFallbackAnalysis(url: string): UrlAnalysisResult {
+  const reasons: string[] = [];
+  let trustScore = 100;
+  let verdict: 'safe' | 'suspicious' | 'dangerous' = 'safe';
+
+  try {
+    const urlObj = new URL(url);
+    
+    // Check HTTPS
+    if (urlObj.protocol !== 'https:') {
+      trustScore -= 20;
+      reasons.push('URL does not use HTTPS');
+    } else {
+      reasons.push('HTTPS enabled');
+    }
+
+    // Check suspicious TLDs
+    const suspiciousTlds = ['tk', 'ml', 'ga', 'cf', 'gq', 'xyz', 'top', 'click', 'download', 'stream'];
+    const tld = urlObj.hostname.split('.').pop()?.toLowerCase() || '';
+    if (suspiciousTlds.includes(tld)) {
+      trustScore -= 15;
+      reasons.push(`Suspicious TLD: .${tld}`);
+    }
+
+    // Check IP address
+    const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(urlObj.hostname);
+    if (isIpAddress) {
+      trustScore -= 25;
+      reasons.push('URL uses IP address instead of domain name');
+    }
+
+    // Check URL length
+    if (urlObj.pathname.length > 200) {
+      trustScore -= 10;
+      reasons.push('URL appears obfuscated (excessive length)');
+    }
+
+    // Determine verdict
+    if (trustScore >= 80) {
+      verdict = 'safe';
+    } else if (trustScore >= 50) {
+      verdict = 'suspicious';
+    } else {
+      verdict = 'dangerous';
+    }
+
+    if (reasons.length === 0 && verdict === 'safe') {
+      reasons.push('No security issues detected');
+    }
+  } catch (error) {
+    trustScore = 0;
+    verdict = 'dangerous';
+    reasons.push('Invalid URL format');
+  }
+
+  return {
+    trustScore: Math.max(0, Math.min(100, trustScore)),
+    verdict,
+    reasons,
+    expandedUrl: url,
+    redirectChain: [],
+  };
+}
+
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>(SCREENS.PRELOADER);
   const [scannedUrl, setScannedUrl] = useState<string | null>(null);
@@ -74,18 +139,33 @@ function App() {
 
     try {
       // Analyze URL
+      console.log('Starting URL analysis for:', expandedUrl);
       const result = await analyzeUrl(expandedUrl);
+      console.log('Analysis result:', result);
+      
+      if (!result) {
+        throw new Error('Analysis returned no result');
+      }
+      
       setAnalysisResult(result);
       
       // Move to verdict screen after analysis completes
       setCurrentScreen(SCREENS.VERDICT);
     } catch (error) {
       console.error('Failed to analyze URL:', error);
-      // Show error or fallback - could add an error screen here
-      // For now, go back to scanner
-      handleScanAgain();
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        url: expandedUrl,
+        apiUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
+      });
+      
+      // Create a fallback result using client-side analysis
+      // This allows the app to work even if the backend is unavailable
+      const fallbackResult = createFallbackAnalysis(expandedUrl);
+      setAnalysisResult(fallbackResult);
+      setCurrentScreen(SCREENS.VERDICT);
     }
-  }, [expandedUrl, analyzeUrl, handleScanAgain]);
+  }, [expandedUrl, analyzeUrl]);
 
   // Handle scanner error
   const handleScannerError = (error: string) => {
