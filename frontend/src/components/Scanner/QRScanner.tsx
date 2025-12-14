@@ -18,19 +18,22 @@ interface Particle {
 }
 
 export function QRScanner({ onScan, onError }: QRScannerProps) {
-  const { videoRef, isScanning, error, hasPermission, startScanning, stopScanning, scanFromFile, scannedText } = useQRScanner({});
+  const { videoRef, isScanning, error, hasPermission, startScanning, stopScanning, scannedText } = useQRScanner({});
   const [showInstruction, setShowInstruction] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showParticles, setShowParticles] = useState(false);
   const [particles, setParticles] = useState<Particle[]>([]);
-  const [pendingScan, setPendingScan] = useState<string | null>(null);
+  const [hasProcessedScan, setHasProcessedScan] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scanCallbackRef = useRef<string | null>(null);
 
   // Generate QR code-like particles when scanned
   useEffect(() => {
-    if (scannedText && !showParticles) {
-      setPendingScan(scannedText);
+    if (scannedText && !showParticles && !hasProcessedScan) {
+      // Stop scanning immediately to prevent multiple scans
+      stopScanning();
+      setHasProcessedScan(true);
       setShowSuccess(true);
       
       // Get the scan area position
@@ -70,23 +73,34 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       setParticles(newParticles);
       setShowParticles(true);
       
+      // Store the scanned text in a ref to ensure we have it when the timer fires
+      scanCallbackRef.current = scannedText;
+      
       // After particles animation, trigger the scan callback
       const timer = setTimeout(() => {
-        if (onScan && pendingScan) {
-          onScan(pendingScan);
+        if (onScan && scanCallbackRef.current) {
+          const textToScan = scanCallbackRef.current;
+          scanCallbackRef.current = null; // Clear to prevent duplicate calls
+          onScan(textToScan);
         }
       }, 1500); // Duration of particle animation
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        scanCallbackRef.current = null;
+      };
     }
-  }, [scannedText, showParticles, pendingScan, onScan, videoRef]);
+  }, [scannedText, showParticles, hasProcessedScan, onScan, videoRef, stopScanning]);
 
   useEffect(() => {
-    startScanning();
+    // Only start scanning if we haven't processed a scan yet
+    if (!hasProcessedScan) {
+      startScanning();
+    }
     return () => {
       stopScanning();
     };
-  }, [startScanning, stopScanning]);
+  }, [startScanning, stopScanning, hasProcessedScan]);
 
   useEffect(() => {
     if (isScanning) {
@@ -115,14 +129,80 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       return;
     }
 
+    // Don't allow upload if we've already processed a scan
+    if (hasProcessedScan) {
+      return;
+    }
+
     setIsUploading(true);
     try {
-      // Clear any previous errors before scanning
-      // The error will be handled by the useEffect hook that watches the error state
-      await scanFromFile(file);
+      // Stop scanning before file upload
+      stopScanning();
+      
+      // Use QrScanner directly to avoid the hook's onScan callback
+      const QrScanner = (await import('qr-scanner')).default;
+      const result = await QrScanner.scanImage(file);
+      
+      if (result) {
+        // Manually trigger the particle animation flow
+        // This will be handled by the useEffect that watches scannedText
+        // But we need to set it manually since we're bypassing the hook
+        setHasProcessedScan(true);
+        setShowSuccess(true);
+        
+        // Get the scan area position
+        const videoContainer = videoRef.current?.parentElement;
+        if (videoContainer) {
+          const rect = videoContainer.getBoundingClientRect();
+          const scanAreaWidth = rect.width * 0.8;
+          const scanAreaHeight = rect.height * 0.8;
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          
+          // Generate particles
+          const newParticles: Particle[] = [];
+          const gridSize = 12;
+          const spacing = Math.min(scanAreaWidth, scanAreaHeight) / gridSize;
+          
+          for (let i = 0; i < gridSize; i++) {
+            for (let j = 0; j < gridSize; j++) {
+              if (Math.random() > 0.3) {
+                const offsetX = (i - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
+                const offsetY = (j - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
+                
+                newParticles.push({
+                  id: i * gridSize + j,
+                  x: centerX + offsetX,
+                  y: centerY + offsetY,
+                  size: spacing * 0.8 + Math.random() * spacing * 0.4,
+                  rotation: Math.random() * 360,
+                  color: Math.random() > 0.5 ? '#00FF88' : '#000000',
+                });
+              }
+            }
+          }
+          
+          setParticles(newParticles);
+          setShowParticles(true);
+          
+          // Store the result in ref
+          scanCallbackRef.current = result;
+          
+          // After animation, call onScan
+          setTimeout(() => {
+            if (onScan && scanCallbackRef.current) {
+              const textToScan = scanCallbackRef.current;
+              scanCallbackRef.current = null; // Clear to prevent duplicate calls
+              onScan(textToScan);
+            }
+          }, 1500);
+        }
+      }
     } catch (err) {
-      // Error is already set in scanFromFile via setError, which will trigger the useEffect
-      // No need to call onError here to avoid duplicate notifications
+      const errorMessage = err instanceof Error ? err.message : 'Failed to scan image';
+      if (onError) {
+        onError(errorMessage);
+      }
       console.error('File upload scan error:', err);
     } finally {
       setIsUploading(false);
