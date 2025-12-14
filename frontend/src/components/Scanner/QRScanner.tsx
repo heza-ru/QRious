@@ -27,10 +27,20 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
   const [hasProcessedScan, setHasProcessedScan] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scanCallbackRef = useRef<string | null>(null);
+  const onScanRef = useRef(onScan);
+  
+  // Keep onScan ref up to date
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
 
   // Generate QR code-like particles when scanned
   useEffect(() => {
+    console.log('Effect triggered:', { scannedText, showParticles, hasProcessedScan });
+    
     if (scannedText && !showParticles && !hasProcessedScan) {
+      console.log('Processing scan - setting up particle animation');
+      
       // Stop scanning immediately to prevent multiple scans
       stopScanning();
       setHasProcessedScan(true);
@@ -38,7 +48,15 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       
       // Get the scan area position
       const videoContainer = videoRef.current?.parentElement;
-      if (!videoContainer) return;
+      if (!videoContainer) {
+        console.error('Video container not found, calling onScan immediately');
+        // If we can't get the container, just call onScan immediately
+        const currentOnScan = onScanRef.current;
+        if (currentOnScan) {
+          currentOnScan(scannedText);
+        }
+        return;
+      }
       
       const rect = videoContainer.getBoundingClientRect();
       const scanAreaWidth = rect.width * 0.8; // 80% of container (scan frame size)
@@ -76,21 +94,38 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       // Store the scanned text in a ref to ensure we have it when the timer fires
       scanCallbackRef.current = scannedText;
       
+      console.log('QR Code scanned! Starting particle animation. URL:', scannedText);
+      console.log('Particles generated:', newParticles.length);
+      
       // After particles animation, trigger the scan callback
       const timer = setTimeout(() => {
-        if (onScan && scanCallbackRef.current) {
+        console.log('Particle animation complete. Calling onScan callback...');
+        const currentOnScan = onScanRef.current;
+        if (currentOnScan && scanCallbackRef.current) {
           const textToScan = scanCallbackRef.current;
+          console.log('Calling onScan with:', textToScan);
           scanCallbackRef.current = null; // Clear to prevent duplicate calls
-          onScan(textToScan);
+          try {
+            currentOnScan(textToScan);
+            console.log('onScan called successfully');
+          } catch (error) {
+            console.error('Error calling onScan:', error);
+          }
+        } else {
+          console.error('onScan callback not available or scanCallbackRef is null', {
+            hasOnScan: !!currentOnScan,
+            hasScanText: !!scanCallbackRef.current
+          });
         }
       }, 1500); // Duration of particle animation
       
       return () => {
+        console.log('Cleaning up particle animation timer');
         clearTimeout(timer);
-        scanCallbackRef.current = null;
+        // Don't clear scanCallbackRef here - we want to keep it for the callback
       };
     }
-  }, [scannedText, showParticles, hasProcessedScan, onScan, videoRef, stopScanning]);
+  }, [scannedText, showParticles, hasProcessedScan, stopScanning]);
 
   useEffect(() => {
     // Only start scanning if we haven't processed a scan yet
@@ -190,10 +225,17 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
           
           // After animation, call onScan
           setTimeout(() => {
-            if (onScan && scanCallbackRef.current) {
+            const currentOnScan = onScanRef.current;
+            if (currentOnScan && scanCallbackRef.current) {
               const textToScan = scanCallbackRef.current;
+              console.log('File upload: Calling onScan with:', textToScan);
               scanCallbackRef.current = null; // Clear to prevent duplicate calls
-              onScan(textToScan);
+              try {
+                currentOnScan(textToScan);
+                console.log('File upload: onScan called successfully');
+              } catch (error) {
+                console.error('File upload: Error calling onScan:', error);
+              }
             }
           }, 1500);
         }

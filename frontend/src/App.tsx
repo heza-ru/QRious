@@ -99,21 +99,29 @@ function App() {
 
   // Handle QR scan - wrapped in useCallback to prevent unnecessary re-renders
   const handleScan = useCallback(async (url: string) => {
+    console.log('handleScan called with URL:', url);
+    console.log('Current screen before scan:', currentScreen);
+    
     setScannedUrl(url);
+    console.log('Setting screen to ANALYSIS');
     setCurrentScreen(SCREENS.ANALYSIS); // Show loading while expanding
 
     try {
+      console.log('Expanding URL:', url);
       // Expand URL to get redirect chain
       const expansion = await expandUrl(url);
+      console.log('URL expanded. Final URL:', expansion.finalUrl);
       setExpandedUrl(expansion.finalUrl);
       setRedirectChain(expansion.redirectChain);
       // Move to URL reveal screen after expansion
+      console.log('Setting screen to URL_REVEAL');
       setCurrentScreen(SCREENS.URL_REVEAL);
     } catch (error) {
       console.error('Failed to expand URL:', error);
       // Continue with original URL if expansion fails
       setExpandedUrl(url);
       setRedirectChain([]);
+      console.log('Setting screen to URL_REVEAL (fallback)');
       setCurrentScreen(SCREENS.URL_REVEAL);
     }
   }, []);
