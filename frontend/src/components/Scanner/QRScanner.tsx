@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, useRef } from 'react';
 import { useQRScanner } from '../../hooks/useQRScanner';
 import { Upload, CheckCircle, Sparkle, Scan } from 'phosphor-react';
+import QrScanner from 'qr-scanner';
 
 interface QRScannerProps {
   onScan: (url: string) => void;
@@ -18,139 +19,130 @@ interface Particle {
 }
 
 export function QRScanner({ onScan, onError }: QRScannerProps) {
+  // Don't pass onScan to hook - we'll handle it ourselves after animation
   const { videoRef, isScanning, error, hasPermission, startScanning, stopScanning, scannedText } = useQRScanner({});
   const [showInstruction, setShowInstruction] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [showParticles, setShowParticles] = useState(false);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [hasProcessedScan, setHasProcessedScan] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const scanCallbackRef = useRef<string | null>(null);
   const onScanRef = useRef(onScan);
+  const pendingScanUrlRef = useRef<string | null>(null);
   
   // Keep onScan ref up to date
   useEffect(() => {
     onScanRef.current = onScan;
   }, [onScan]);
 
-  // Generate QR code-like particles when scanned
+  // Handle scanned text from camera
   useEffect(() => {
-    console.log('Effect triggered:', { scannedText, showParticles, hasProcessedScan });
-    
-    if (scannedText && !showParticles && !hasProcessedScan) {
-      console.log('Processing scan - setting up particle animation');
-      
-      // Stop scanning immediately to prevent multiple scans
-      stopScanning();
-      setHasProcessedScan(true);
-      setShowSuccess(true);
-      
-      // Get the scan area position
-      const videoContainer = videoRef.current?.parentElement;
-      if (!videoContainer) {
-        console.error('Video container not found, calling onScan immediately');
-        // If we can't get the container, just call onScan immediately
-        const currentOnScan = onScanRef.current;
-        if (currentOnScan) {
-          currentOnScan(scannedText);
+    if (scannedText && !hasProcessedScan) {
+      console.log('QR Code detected from camera:', scannedText);
+      handleScanResult(scannedText);
+    }
+  }, [scannedText, hasProcessedScan]);
+
+  // Unified function to handle scan results (from camera or file)
+  const handleScanResult = (url: string) => {
+    if (hasProcessedScan) {
+      console.log('Scan already processed, ignoring');
+      return;
+    }
+
+    console.log('Processing scan result:', url);
+    setHasProcessedScan(true);
+    stopScanning();
+    pendingScanUrlRef.current = url;
+
+    // Get the scan area position for particles
+    const videoContainer = videoRef.current?.parentElement;
+    if (!videoContainer) {
+      console.warn('Video container not found, calling onScan immediately');
+      // Fallback: call onScan immediately if we can't show particles
+      setTimeout(() => {
+        if (onScanRef.current && pendingScanUrlRef.current) {
+          onScanRef.current(pendingScanUrlRef.current);
         }
-        return;
-      }
-      
-      const rect = videoContainer.getBoundingClientRect();
-      const scanAreaWidth = rect.width * 0.8; // 80% of container (scan frame size)
-      const scanAreaHeight = rect.height * 0.8;
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      
-      // Generate particles that look like QR code squares
-      const newParticles: Particle[] = [];
-      const gridSize = 12;
-      const spacing = Math.min(scanAreaWidth, scanAreaHeight) / gridSize;
-      
-      for (let i = 0; i < gridSize; i++) {
-        for (let j = 0; j < gridSize; j++) {
-          // Randomly include particles (like QR code pattern)
-          if (Math.random() > 0.3) {
-            const offsetX = (i - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
-            const offsetY = (j - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
-            
-            newParticles.push({
-              id: i * gridSize + j,
-              x: centerX + offsetX,
-              y: centerY + offsetY,
-              size: spacing * 0.8 + Math.random() * spacing * 0.4,
-              rotation: Math.random() * 360,
-              color: Math.random() > 0.5 ? '#00FF88' : '#000000',
-            });
-          }
-        }
-      }
-      
-      setParticles(newParticles);
-      setShowParticles(true);
-      
-      // Store the scanned text in a ref to ensure we have it when the timer fires
-      scanCallbackRef.current = scannedText;
-      
-      console.log('QR Code scanned! Starting particle animation. URL:', scannedText);
-      console.log('Particles generated:', newParticles.length);
-      
-      // After particles animation, trigger the scan callback
-      const timer = setTimeout(() => {
-        console.log('Particle animation complete. Calling onScan callback...');
-        const currentOnScan = onScanRef.current;
-        if (currentOnScan && scanCallbackRef.current) {
-          const textToScan = scanCallbackRef.current;
-          console.log('Calling onScan with:', textToScan);
-          scanCallbackRef.current = null; // Clear to prevent duplicate calls
-          
-          // Ensure scanner is stopped before calling onScan
-          stopScanning();
-          
-          try {
-            // Call onScan - this should trigger navigation away from scanner screen
-            currentOnScan(textToScan);
-            console.log('onScan called successfully - navigation should happen now');
-          } catch (error) {
-            console.error('Error calling onScan:', error);
-            // Reset state on error so user can try again
-            setHasProcessedScan(false);
-            setShowParticles(false);
-            setShowSuccess(false);
-          }
-        } else {
-          console.error('onScan callback not available or scanCallbackRef is null', {
-            hasOnScan: !!currentOnScan,
-            hasScanText: !!scanCallbackRef.current
+      }, 100);
+      return;
+    }
+
+    const rect = videoContainer.getBoundingClientRect();
+    const scanAreaWidth = rect.width * 0.8;
+    const scanAreaHeight = rect.height * 0.8;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Generate particles
+    const newParticles: Particle[] = [];
+    const gridSize = 12;
+    const spacing = Math.min(scanAreaWidth, scanAreaHeight) / gridSize;
+
+    for (let i = 0; i < gridSize; i++) {
+      for (let j = 0; j < gridSize; j++) {
+        if (Math.random() > 0.3) {
+          const offsetX = (i - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
+          const offsetY = (j - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
+
+          newParticles.push({
+            id: i * gridSize + j,
+            x: centerX + offsetX,
+            y: centerY + offsetY,
+            size: spacing * 0.8 + Math.random() * spacing * 0.4,
+            rotation: Math.random() * 360,
+            color: Math.random() > 0.5 ? '#00FF88' : '#000000',
           });
         }
-      }, 1500); // Duration of particle animation
-      
-      return () => {
-        console.log('Cleaning up particle animation timer');
-        clearTimeout(timer);
-        // Don't clear scanCallbackRef here - we want to keep it for the callback
-      };
+      }
     }
-  }, [scannedText, showParticles, hasProcessedScan, stopScanning]);
 
+    setParticles(newParticles);
+    setShowParticles(true);
+    console.log('Particle animation started with', newParticles.length, 'particles');
+
+    // After animation, call onScan
+    const timer = setTimeout(() => {
+      console.log('Particle animation complete, calling onScan');
+      const currentOnScan = onScanRef.current;
+      const urlToScan = pendingScanUrlRef.current;
+      
+      if (currentOnScan && urlToScan) {
+        console.log('Calling onScan with URL:', urlToScan);
+        try {
+          currentOnScan(urlToScan);
+          console.log('onScan called successfully');
+        } catch (error) {
+          console.error('Error in onScan callback:', error);
+          // Reset on error
+          setHasProcessedScan(false);
+          setShowParticles(false);
+          pendingScanUrlRef.current = null;
+        }
+      } else {
+        console.error('Cannot call onScan - missing callback or URL', {
+          hasCallback: !!currentOnScan,
+          hasUrl: !!urlToScan
+        });
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  };
+
+  // Start scanning on mount (only if not processed)
   useEffect(() => {
-    // Only start scanning if we haven't processed a scan yet
-    // This prevents the scanner from restarting after a successful scan
-    if (!hasProcessedScan && !showParticles) {
-      console.log('Starting scanner (hasProcessedScan:', hasProcessedScan, ', showParticles:', showParticles, ')');
+    if (!hasProcessedScan) {
+      console.log('Starting scanner');
       startScanning();
-    } else {
-      console.log('Skipping scanner start - scan already processed or particles showing');
     }
     return () => {
       console.log('Cleaning up scanner');
       stopScanning();
     };
-  }, [startScanning, stopScanning, hasProcessedScan, showParticles]);
+  }, [startScanning, stopScanning, hasProcessedScan]);
 
+  // Hide instruction after delay
   useEffect(() => {
     if (isScanning) {
       const timer = setTimeout(() => {
@@ -160,17 +152,18 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
     }
   }, [isScanning]);
 
+  // Handle errors
   useEffect(() => {
     if (error && onError) {
       onError(error);
     }
   }, [error, onError]);
 
+  // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       if (onError) {
         onError('Please select an image file');
@@ -178,91 +171,33 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       return;
     }
 
-    // Don't allow upload if we've already processed a scan
     if (hasProcessedScan) {
+      console.log('Scan already processed, ignoring file upload');
       return;
     }
 
     setIsUploading(true);
     try {
-      // Stop scanning before file upload
       stopScanning();
-      
-      // Use QrScanner directly to avoid the hook's onScan callback
-      const QrScanner = (await import('qr-scanner')).default;
+      console.log('Scanning file:', file.name);
       const result = await QrScanner.scanImage(file);
       
       if (result) {
-        // Manually trigger the particle animation flow
-        // This will be handled by the useEffect that watches scannedText
-        // But we need to set it manually since we're bypassing the hook
-        setHasProcessedScan(true);
-        setShowSuccess(true);
-        
-        // Get the scan area position
-        const videoContainer = videoRef.current?.parentElement;
-        if (videoContainer) {
-          const rect = videoContainer.getBoundingClientRect();
-          const scanAreaWidth = rect.width * 0.8;
-          const scanAreaHeight = rect.height * 0.8;
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          
-          // Generate particles
-          const newParticles: Particle[] = [];
-          const gridSize = 12;
-          const spacing = Math.min(scanAreaWidth, scanAreaHeight) / gridSize;
-          
-          for (let i = 0; i < gridSize; i++) {
-            for (let j = 0; j < gridSize; j++) {
-              if (Math.random() > 0.3) {
-                const offsetX = (i - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
-                const offsetY = (j - gridSize / 2) * spacing + (Math.random() - 0.5) * spacing * 0.5;
-                
-                newParticles.push({
-                  id: i * gridSize + j,
-                  x: centerX + offsetX,
-                  y: centerY + offsetY,
-                  size: spacing * 0.8 + Math.random() * spacing * 0.4,
-                  rotation: Math.random() * 360,
-                  color: Math.random() > 0.5 ? '#00FF88' : '#000000',
-                });
-              }
-            }
-          }
-          
-          setParticles(newParticles);
-          setShowParticles(true);
-          
-          // Store the result in ref
-          scanCallbackRef.current = result;
-          
-          // After animation, call onScan
-          setTimeout(() => {
-            const currentOnScan = onScanRef.current;
-            if (currentOnScan && scanCallbackRef.current) {
-              const textToScan = scanCallbackRef.current;
-              console.log('File upload: Calling onScan with:', textToScan);
-              scanCallbackRef.current = null; // Clear to prevent duplicate calls
-              try {
-                currentOnScan(textToScan);
-                console.log('File upload: onScan called successfully');
-              } catch (error) {
-                console.error('File upload: Error calling onScan:', error);
-              }
-            }
-          }, 1500);
+        console.log('QR Code found in file:', result);
+        handleScanResult(result);
+      } else {
+        if (onError) {
+          onError('No QR code found in image');
         }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to scan image';
+      console.error('File scan error:', err);
       if (onError) {
         onError(errorMessage);
       }
-      console.error('File upload scan error:', err);
     } finally {
       setIsUploading(false);
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -270,7 +205,9 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
   };
 
   const handleUploadClick = () => {
-    fileInputRef.current?.click();
+    if (!hasProcessedScan) {
+      fileInputRef.current?.click();
+    }
   };
 
   if (hasPermission === false) {
@@ -314,15 +251,12 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
             }}
           >
             {particles.map((particle) => {
-              // Calculate direction towards center of screen (camera view)
               const screenCenterX = window.innerWidth / 2;
               const screenCenterY = window.innerHeight / 2;
               const dx = screenCenterX - particle.x;
               const dy = screenCenterY - particle.y;
               const distance = Math.sqrt(dx * dx + dy * dy);
               const angle = Math.atan2(dy, dx);
-              
-              // Add some randomness to the direction
               const randomAngle = angle + (Math.random() - 0.5) * 0.5;
               const travelDistance = distance * 1.5 + Math.random() * 200;
               const finalX = particle.x + Math.cos(randomAngle) * travelDistance;
@@ -343,16 +277,16 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
                   animate={{
                     x: finalX,
                     y: finalY,
-                    scale: 4 + Math.random() * 3, // Scale up dramatically as it comes closer
+                    scale: 4 + Math.random() * 3,
                     rotateZ: particle.rotation + (Math.random() - 0.5) * 1080,
                     rotateX: Math.random() * 720,
                     rotateY: Math.random() * 720,
                     opacity: [1, 1, 0.8, 0],
-                    z: 800 + Math.random() * 400, // Move towards camera in 3D space
+                    z: 800 + Math.random() * 400,
                   }}
                   transition={{
                     duration: 1.2 + Math.random() * 0.4,
-                    ease: [0.2, 0, 0.2, 1], // Custom easing for smooth motion
+                    ease: [0.2, 0, 0.2, 1],
                   }}
                   style={{
                     width: particle.size,
@@ -386,7 +320,7 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
           className="w-full h-full object-cover"
         />
 
-        {/* Enhanced Scan frame overlay */}
+        {/* Scan frame overlay */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-4/5 h-4/5 border-2 border-accent-safe/40 rounded-xl relative">
             {/* Glowing border */}
@@ -407,7 +341,7 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
               }}
             />
             
-            {/* Enhanced corner indicators with glow */}
+            {/* Corner indicators */}
             {[
               { pos: 'top-left', classes: '-top-1 -left-1 border-t-2 border-l-2 rounded-tl-xl' },
               { pos: 'top-right', classes: '-top-1 -right-1 border-t-2 border-r-2 rounded-tr-xl' },
@@ -435,8 +369,8 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
               />
             ))}
 
-            {/* Enhanced animated scan line with glow */}
-            {isScanning && !showSuccess && !showParticles && (
+            {/* Scan line */}
+            {isScanning && !hasProcessedScan && (
               <>
                 <motion.div
                   className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-accent-safe to-transparent"
@@ -468,8 +402,8 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
               </>
             )}
             
-            {/* Scanning indicator icons */}
-            {isScanning && !showSuccess && !showParticles && (
+            {/* Scanning indicators */}
+            {isScanning && !hasProcessedScan && (
               <>
                 {[...Array(4)].map((_, i) => (
                   <motion.div
@@ -511,9 +445,9 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
               </>
             )}
 
-            {/* Enhanced Success animation overlay */}
+            {/* Success overlay */}
             <AnimatePresence>
-              {showSuccess && !showParticles && (
+              {hasProcessedScan && !showParticles && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -525,7 +459,6 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
                   }}
                   className="absolute inset-0 flex items-center justify-center bg-accent-safe/30 rounded-xl backdrop-blur-md"
                 >
-                  {/* Multiple pulse rings */}
                   {[0, 1, 2, 3].map((i) => (
                     <motion.div
                       key={i}
@@ -578,7 +511,6 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
                       />
                     </motion.div>
                     
-                    {/* Sparkles around success icon */}
                     {[...Array(8)].map((_, i) => (
                       <motion.div
                         key={i}
@@ -619,7 +551,7 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
 
         {/* Instruction text */}
         <AnimatePresence>
-          {showInstruction && isScanning && (
+          {showInstruction && isScanning && !hasProcessedScan && (
             <motion.div
               initial={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
@@ -634,10 +566,10 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
         </AnimatePresence>
       </div>
 
-      {/* Enhanced Upload button */}
+      {/* Upload button */}
       <motion.button
         onClick={handleUploadClick}
-        disabled={isUploading}
+        disabled={isUploading || hasProcessedScan}
         whileHover={{ 
           scale: 1.05,
           boxShadow: '0 0 20px rgba(0, 255, 136, 0.3)',
@@ -645,7 +577,6 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
         whileTap={{ scale: 0.95 }}
         className="relative flex items-center gap-3 px-8 py-4 bg-background-secondary rounded-xl text-text-primary hover:bg-background-tertiary active:bg-background-tertiary transition-all touch-manipulation min-h-[48px] disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden group"
       >
-        {/* Animated background gradient */}
         <motion.div
           className="absolute inset-0 bg-gradient-to-r from-accent-safe/10 via-accent-safe/5 to-accent-safe/10"
           animate={{
@@ -677,4 +608,3 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
     </div>
   );
 }
-
