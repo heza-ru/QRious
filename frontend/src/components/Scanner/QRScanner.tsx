@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useQRScanner } from '../../hooks/useQRScanner';
+import { Upload } from 'phosphor-react';
 
 interface QRScannerProps {
   onScan: (url: string) => void;
@@ -8,8 +9,10 @@ interface QRScannerProps {
 }
 
 export function QRScanner({ onScan, onError }: QRScannerProps) {
-  const { videoRef, isScanning, error, hasPermission, startScanning, stopScanning } = useQRScanner({ onScan });
+  const { videoRef, isScanning, error, hasPermission, startScanning, stopScanning, scanFromFile } = useQRScanner({ onScan });
   const [showInstruction, setShowInstruction] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     startScanning();
@@ -33,12 +36,37 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
     }
   }, [error, onError]);
 
-  // Listen for QR code detection from worker
-  useEffect(() => {
-    // This will be handled by the useQRScanner hook
-    // We need to expose the scanned URL through a callback
-    // For now, we'll use a custom event or prop callback
-  }, []);
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      if (onError) {
+        onError('Please select an image file');
+      }
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      await scanFromFile(file);
+    } catch (err) {
+      if (onError) {
+        onError(err instanceof Error ? err.message : 'Failed to scan QR code from image');
+      }
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
 
   if (hasPermission === false) {
     return (
@@ -57,9 +85,18 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center">
+    <div className="relative w-full h-full flex flex-col items-center justify-center gap-6">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
+
       {/* Camera feed container */}
-      <div className="relative w-full max-w-md aspect-square rounded-2xl overflow-hidden bg-background-secondary max-h-[85vh]">
+      <div className="relative w-full max-w-md aspect-square rounded-2xl overflow-hidden bg-background-secondary max-h-[70vh]">
         <video
           ref={videoRef}
           autoPlay
@@ -109,6 +146,16 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Upload button */}
+      <button
+        onClick={handleUploadClick}
+        disabled={isUploading}
+        className="flex items-center gap-2 px-6 py-3 bg-background-secondary rounded-xl text-text-primary hover:bg-background-tertiary active:bg-background-tertiary transition-colors touch-manipulation min-h-[48px] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Upload size={20} weight="bold" />
+        <span>{isUploading ? 'Scanning...' : 'Upload QR Code Image'}</span>
+      </button>
     </div>
   );
 }
