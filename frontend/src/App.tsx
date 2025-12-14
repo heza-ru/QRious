@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { LaunchScreen } from './components/screens/LaunchScreen';
 import { ScannerScreen } from './components/screens/ScannerScreen';

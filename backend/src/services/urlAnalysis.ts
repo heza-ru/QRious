@@ -8,6 +8,24 @@ interface HeuristicCheck {
   reason?: string;
 }
 
+interface GoogleSafeBrowsingResponse {
+  matches?: Array<{
+    threatType: string;
+    platformType: string;
+    threatEntryType: string;
+    threat: {
+      url: string;
+    };
+  }>;
+}
+
+interface VirusTotalResponse {
+  response_code: number;
+  positives?: number;
+  total?: number;
+  url?: string;
+}
+
 export class UrlAnalysisService {
   private suspiciousTlds = new Set([
     'tk', 'ml', 'ga', 'cf', 'gq', 'xyz', 'top', 'click', 'download', 'stream',
@@ -191,9 +209,9 @@ export class UrlAnalysisService {
         return { passed: true }; // Don't penalize on API error
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GoogleSafeBrowsingResponse;
       if (data.matches && data.matches.length > 0) {
-        const threatTypes = data.matches.map((m: any) => m.threatType).join(', ');
+        const threatTypes = data.matches.map((m) => m.threatType).join(', ');
         return {
           passed: false,
           reason: `Flagged by Google Safe Browsing: ${threatTypes}`,
@@ -234,8 +252,8 @@ export class UrlAnalysisService {
         return { passed: true };
       }
 
-      const data = await reportResponse.json();
-      if (data.response_code === 1 && data.positives > 0) {
+      const data = (await reportResponse.json()) as VirusTotalResponse;
+      if (data.response_code === 1 && data.positives && data.positives > 0) {
         return {
           passed: false,
           reason: `Flagged by ${data.positives} security vendors on VirusTotal`,
