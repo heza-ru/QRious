@@ -48,6 +48,8 @@ export class UrlAnalysisService {
     const heuristicChecks = this.runHeuristicChecks(finalUrl, expansion.redirectChain);
 
     // Run external API checks if configured
+    // TODO: Re-enable API checks when API keys are configured
+    // For now, using only heuristic checks to avoid API dependencies
     const apiChecks = await this.runApiChecks(finalUrl);
 
     // Calculate trust score
@@ -154,6 +156,11 @@ export class UrlAnalysisService {
   private async runApiChecks(url: string): Promise<{ passed: boolean; reason?: string }[]> {
     const results: { passed: boolean; reason?: string }[] = [];
 
+    // API checks are currently disabled - using only heuristic checks
+    // TODO: Re-enable when API keys are configured
+    // Uncomment the code below when ready to use external APIs:
+    
+    /*
     // Google Safe Browsing API check
     const safeBrowsingKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
     if (safeBrowsingKey) {
@@ -177,6 +184,7 @@ export class UrlAnalysisService {
         console.error('VirusTotal API check failed:', error);
       }
     }
+    */
 
     return results;
   }

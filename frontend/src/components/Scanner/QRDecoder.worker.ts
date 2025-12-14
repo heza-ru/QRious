@@ -7,10 +7,10 @@ self.onmessage = async (event: MessageEvent) => {
 
   try {
     if (!codeReader) {
-      const hints = new Map();
+      const hints = new Map<DecodeHintType, any>();
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
       hints.set(DecodeHintType.TRY_HARDER, true);
-      codeReader = new BrowserQRCodeReader(hints);
+      codeReader = new BrowserQRCodeReader(hints as any);
     }
 
     // Create ImageData from the received data
@@ -32,9 +32,10 @@ self.onmessage = async (event: MessageEvent) => {
 
     // Convert canvas to ImageBitmap for decoding
     const imageBitmap = await createImageBitmap(canvas);
-
-    // Decode QR code
-    const result = await codeReader.decodeFromImageBitmap(imageBitmap);
+    
+    // Use decodeFromImageElement - it accepts ImageBitmap in newer versions
+    // Cast to any to work around TypeScript type issues with ImageBitmap
+    const result = await (codeReader as any).decodeFromImageElement(imageBitmap as any);
     
     if (result) {
       self.postMessage({

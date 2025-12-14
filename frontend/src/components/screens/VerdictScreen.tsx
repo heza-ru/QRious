@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { TrustScore } from '../ui/TrustScore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { Copy, Check, ExternalLink } from 'phosphor-react';
+import { Copy, Check, ArrowSquareOut } from 'phosphor-react';
 import { pageVariants, pageTransition } from '../../hooks/useAnimationVariants';
 import { copyToClipboard, getVerdictColor } from '../../utils/helpers';
 import type { UrlAnalysisResult } from '../../services/api';
@@ -122,7 +122,7 @@ export function VerdictScreen({ result, onViewDetails, onScanAgain }: VerdictScr
               size="lg"
               className="w-full sm:w-auto flex items-center justify-center gap-2 touch-manipulation"
             >
-              <ExternalLink size={20} weight="bold" />
+              <ArrowSquareOut size={20} weight="bold" />
               View Details
             </Button>
           )}
